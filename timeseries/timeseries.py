@@ -5,13 +5,16 @@ import subprocess
 import sys
 import time
 
+
 def _round_time(precise: datetime.datetime, period: datetime.timedelta, midpoint: float = 0.5) -> datetime.datetime:
     epoch = datetime.datetime.utcfromtimestamp(0)
     delta_ms = period.total_seconds()
-    precise_ms = ((precise-epoch).total_seconds())
+    precise_ms = (precise - epoch).total_seconds()
     difference = precise_ms % delta_ms
-    ret = datetime.datetime.utcfromtimestamp(precise_ms-difference+(delta_ms*midpoint))
+    ret = datetime.datetime.utcfromtimestamp(
+        precise_ms - difference + (delta_ms * midpoint))
     return ret
+
 
 class _Period:
     def __init__(self, begin: datetime.datetime) -> None:
@@ -32,8 +35,17 @@ class _Period:
     def avg(self):
         return statistics.mean(self._data)
 
-    def is_finished(self, time: datetime.datetime, averaging_period: datetime.timedelta) -> bool:
-        return ((time - self._begin) > averaging_period)
+    def min(self):
+        return min(self._data)
+
+    def max(self):
+        return max(self._data)
+
+    def is_finished(
+        self, time: datetime.datetime, averaging_period: datetime.timedelta
+    ) -> bool:
+        return (time - self._begin) > averaging_period
+
 
 class Timeseries:
     def __init__(self, period: datetime.timedelta) -> None:
@@ -44,7 +56,8 @@ class Timeseries:
         self.max: List[float] = []
         self.cnt: List[int] = []
         self.averaging_period: datetime.timedelta = period
-        self.current_period = _Period(_round_time(datetime.datetime.now(), self.averaging_period, 0.0))
+        self.current_period = _Period(_round_time(
+            datetime.datetime.now(), self.averaging_period, 0.0))
 
     def __str__(self) -> str:
         return str(self.time) + str(self.avg)
@@ -57,16 +70,25 @@ class Timeseries:
             time = datetime.datetime.now()
         if not self.averaging_period is None:
             if self._is_period_finished(time):
-                self.time.append(self.current_period.time(self.averaging_period))
+                self.time.append(
+                    self.current_period.time(self.averaging_period))
                 self.avg.append(self.current_period.avg())
-                self.current_period = _Period(_round_time(time, self.averaging_period, 0.0))
+                self.min.append(self.current_period.min())
+                self.max.append(self.current_period.max())
+                self.current_period = _Period(
+                    _round_time(time, self.averaging_period, 0.0))
             self.current_period.add(value, time)
             if not self._is_period_finished(time):
-                if(len(self.time) == 0):
-                    self.time.append(self.current_period.time(self.averaging_period))
+                if len(self.time) == 0:
+                    self.time.append(
+                        self.current_period.time(self.averaging_period))
                     self.avg.append(self.current_period.avg())
+                    self.min.append(self.current_period.min())
+                    self.max.append(self.current_period.max())
                 self.time[-1] = self.current_period.time(self.averaging_period)
                 self.avg[-1] = self.current_period.avg()
+                self.min[-1] = self.current_period.min()
+                self.max[-1] = self.current_period.max()
         else:
             self.time.append(time)
             self.avg.append(value)
@@ -75,14 +97,14 @@ class Timeseries:
             self.max.append(value)
             self.cnt.append(1)
 
-
     def set_history_length(self, length: datetime.timedelta) -> None:
         pass
 
     def begin(self) -> datetime.datetime:
-        if(len(self.time) == 0):
-            if(len(self.current_period) == 0):
-                raise Exception("Timeseries object has not received any data yet")
+        if len(self.time) == 0:
+            if len(self.current_period) == 0:
+                raise Exception(
+                    "Timeseries object has not received any data yet")
             else:
                 ret = self.current_period._time[0]
         else:
@@ -96,12 +118,19 @@ class Timeseries:
 
 
 if __name__ == "__main__":
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+
     subcommand_args = sys.argv[1:]
-    # subcommand_args = ["cat", "/sys/class/thermal/thermal_zone1/temp"]
-    
-    ts = Timeseries(datetime.timedelta(seconds=10))
+
+    ts = Timeseries(datetime.timedelta(seconds=5))
     while True:
         r = subprocess.run(subcommand_args, stdout=subprocess.PIPE)
         ts.add(int(r.stdout))
-        print(ts.avg)
-        time.sleep(1)
+        plt.clf()
+        plt.fill_between(ts.time, ts.min, ts.max,)
+        plt.plot(ts.time, ts.avg, "r-")
+        plt.draw()
+        plt.pause(0.2)
