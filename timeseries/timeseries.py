@@ -1,6 +1,9 @@
 from typing import List
 import datetime
 import statistics
+import subprocess
+import sys
+import time
 
 def _round_time(precise: datetime.datetime, period: datetime.timedelta, midpoint: float = 0.5) -> datetime.datetime:
     epoch = datetime.datetime.utcfromtimestamp(0)
@@ -11,9 +14,10 @@ def _round_time(precise: datetime.datetime, period: datetime.timedelta, midpoint
     return ret
 
 class _Period:
-    def __init__(self) -> None:
+    def __init__(self, begin: datetime.datetime) -> None:
         self._time: List[datetime.datetime] = []
         self._data: List[float] = []
+        self._begin = begin
 
     def __len__(self) -> int:
         return len(self._time)
@@ -28,16 +32,19 @@ class _Period:
     def avg(self):
         return statistics.mean(self._data)
 
+    def is_finished(self, time: datetime.datetime, averaging_period: datetime.timedelta) -> bool:
+        return ((time - self._begin) > averaging_period)
+
 class Timeseries:
-    def __init__(self) -> None:
+    def __init__(self, period: datetime.timedelta) -> None:
         self.time: List[datetime.datetime] = []
         self.avg: List[float] = []
         self.std: List[float] = []
         self.min: List[float] = []
         self.max: List[float] = []
         self.cnt: List[int] = []
-        self.averaging_period: datetime.timedelta = None
-        self.current_period = _Period()
+        self.averaging_period: datetime.timedelta = period
+        self.current_period = _Period(_round_time(datetime.datetime.now(), self.averaging_period, 0.0))
 
     def __str__(self) -> str:
         return str(self.time) + str(self.avg)
@@ -45,11 +52,14 @@ class Timeseries:
     def __len__(self) -> int:
         return len(self.time)
 
-    def add(self, value: float, time: datetime.datetime = datetime.datetime.now()) -> None:
+    def add(self, value: float, time: datetime.datetime = None) -> None:
+        if time is None:
+            time = datetime.datetime.now()
         if not self.averaging_period is None:
             if self._is_period_finished(time):
                 self.time.append(self.current_period.time(self.averaging_period))
                 self.avg.append(self.current_period.avg())
+                self.current_period = _Period(_round_time(time, self.averaging_period, 0.0))
             self.current_period.add(value, time)
             if not self._is_period_finished(time):
                 if(len(self.time) == 0):
@@ -65,12 +75,6 @@ class Timeseries:
             self.max.append(value)
             self.cnt.append(1)
 
-    def set_averaging_period(self, period: datetime.timedelta) -> None:
-        if not self.averaging_period is None:
-            # TODO: implement interpolation/extrapolation
-            pass
-        else:
-            self.averaging_period = period
 
     def set_history_length(self, length: datetime.timedelta) -> None:
         pass
@@ -88,12 +92,16 @@ class Timeseries:
         return ret
 
     def _is_period_finished(self, time: datetime.datetime) -> bool:
-        ret = False
-        if(len(self.current_period) > 0):
-            ret = ((time - self.begin()) > self.averaging_period)
-        return ret
+        return self.current_period.is_finished(time, self.averaging_period)
 
 
 if __name__ == "__main__":
-    ts = Timeseries()
-    print(ts)
+    subcommand_args = sys.argv[1:]
+    # subcommand_args = ["cat", "/sys/class/thermal/thermal_zone1/temp"]
+    
+    ts = Timeseries(datetime.timedelta(seconds=10))
+    while True:
+        r = subprocess.run(subcommand_args, stdout=subprocess.PIPE)
+        ts.add(int(r.stdout))
+        print(ts.avg)
+        time.sleep(1)
