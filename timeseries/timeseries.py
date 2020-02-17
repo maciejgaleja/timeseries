@@ -118,6 +118,14 @@ class Timeseries:
 
 
 if __name__ == "__main__":
+    def call_command_and_get_output(cmd: List[str]) -> List[float]:
+        r = subprocess.run(cmd, stdout=subprocess.PIPE)
+        tokens = r.stdout.decode("utf-8").split()
+        print(tokens)
+        for token in tokens:
+            token = token.replace("\"", "")
+        return [float(tokens[0])]
+
     import numpy as np
     import matplotlib.pyplot as plt
     import argparse
@@ -131,17 +139,16 @@ if __name__ == "__main__":
                         help="command to call (with arguments)")
 
     args = parser.parse_args(sys.argv[1:])
-
     print(args)
 
     fig = plt.figure()
 
     ts = Timeseries(datetime.timedelta(seconds=args.period[0]))
     while True:
-        r = subprocess.run(args.command, stdout=subprocess.PIPE)
-        ts.add(int(r.stdout))
+        r = call_command_and_get_output(args.command)
+        ts.add(int(r[0]))
         plt.clf()
         plt.fill_between(ts.time, ts.min, ts.max,)
         plt.plot(ts.time, ts.avg, "r-")
         plt.draw()
-        plt.pause(0.2)
+        plt.pause(args.delay[0])
