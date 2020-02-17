@@ -120,14 +120,25 @@ class Timeseries:
 if __name__ == "__main__":
     import numpy as np
     import matplotlib.pyplot as plt
+    import argparse
+
+    parser = argparse.ArgumentParser("plot")
+    parser.add_argument("-p", "--period", nargs=1, type=int,
+                        default=10, help="averaging period")
+    parser.add_argument("-d", "--delay", nargs=1, type=float,
+                        default=1, help="delay between subsequent calls")
+    parser.add_argument("-c", "--command", nargs="+",
+                        help="command to call (with arguments)")
+
+    args = parser.parse_args(sys.argv[1:])
+
+    print(args)
 
     fig = plt.figure()
 
-    subcommand_args = sys.argv[1:]
-
-    ts = Timeseries(datetime.timedelta(seconds=5))
+    ts = Timeseries(datetime.timedelta(seconds=args.period[0]))
     while True:
-        r = subprocess.run(subcommand_args, stdout=subprocess.PIPE)
+        r = subprocess.run(args.command, stdout=subprocess.PIPE)
         ts.add(int(r.stdout))
         plt.clf()
         plt.fill_between(ts.time, ts.min, ts.max,)
